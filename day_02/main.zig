@@ -1,103 +1,78 @@
 const std = @import("std");
 const print = std.debug.print;
+const allocator = std.heap.page_allocator;
 
-fn part1(input: []const u8) !u32 {
-    var it = std.mem.splitScalar(u8, input, '\n');
-    var okay_reports: u32 = 0;
-    reports: while (it.next()) |line| {
-        if (line.len == 0) break;
-        var it2 = std.mem.splitScalar(u8, line, ' ');
-        var firstnum: i32 = 0;
-        if (it2.next()) |num| {
-            firstnum = try std.fmt.parseInt(i32, num, 10);
-        }
-        var curnum = firstnum;
-        var increasing = false;
-        if (it2.next()) |num| {
-            curnum = try std.fmt.parseInt(i32, num, 10);
-            if (curnum < firstnum and firstnum - curnum <= 3) {
-                increasing = false;
-            } else if (curnum > firstnum and curnum - firstnum <= 3) {
-                increasing = true;
-            } else {
-                continue :reports;
-            }
-        }
-        while (it2.next()) |num| {
-            const thisnum = try std.fmt.parseInt(i32, num, 10);
-            if (!increasing and thisnum < curnum and curnum - thisnum <= 3) {
-                curnum = thisnum;
-            } else if (increasing and thisnum > curnum and thisnum - curnum <= 3) {
-                curnum = thisnum;
-            } else {
-                continue :reports;
-            }
-        }
-        okay_reports += 1;
-    }
-    return okay_reports;
-}
-
-fn excludeIndex(arr: []const u32, exclude_index: usize) ![]u32 {
-    var allocator = std.heap.page_allocator;
+fn exclude_index(arr: []const u32, index: usize) ![]u32 {
     var result = try allocator.alloc(u32, arr.len - 1);
 
     var j: usize = 0;
     for (arr, 0..arr.len) |val, i| {
-        if (i == exclude_index) continue;
+        if (i == index) continue;
         result[j] = val;
         j += 1;
     }
     return result;
 }
 
-fn is_increasing(arr: []const u32, max_faults: u32) !bool {
-    var allocator = std.heap.page_allocator;
-    var lastnum = arr[0];
-    for (arr[1..], 1..arr.len) |num, i| {
-        if (num > lastnum and num - lastnum <= 3) {
-            lastnum = num;
+fn is_trend(arr: []const u32, max_faults: u32, compare: fn (u32, u32) bool) !bool {
+    var last_num = arr[0];
+    for (arr[1..], 1..arr.len) |current_num, i| {
+        if (compare(current_num, last_num)) {
+            last_num = current_num;
         } else {
             if (max_faults == 0) return false;
-            const copy1 = try excludeIndex(arr, i);
-            defer allocator.free(copy1);
-            const copy2 = try excludeIndex(arr, i - 1);
-            defer allocator.free(copy2);
 
-            if (!try is_increasing(copy1, max_faults - 1) and !try is_increasing(copy2, max_faults - 1)) {
-                return false;
-            } else {
-                break;
-            }
+            const arr_without_current = try exclude_index(arr, i);
+            defer allocator.free(arr_without_current);
+            const arr_without_previous = try exclude_index(arr, i - 1);
+            defer allocator.free(arr_without_previous);
+
+            const is_valid =
+                try is_trend(arr_without_current, max_faults - 1, compare) or
+                try is_trend(arr_without_previous, max_faults - 1, compare);
+
+            if (!is_valid) return false;
+
+            break;
         }
     }
     return true;
 }
-fn is_decreasing(arr: []const u32, max_faults: u32) !bool {
-    var allocator = std.heap.page_allocator;
-    var lastnum = arr[0];
-    for (arr[1..], 1..arr.len) |num, i| {
-        if (num < lastnum and lastnum - num <= 3) {
-            lastnum = num;
-        } else {
-            if (max_faults == 0) return false;
-            const copy1 = try excludeIndex(arr, i);
-            defer allocator.free(copy1);
-            const copy2 = try excludeIndex(arr, i - 1);
-            defer allocator.free(copy2);
 
-            if (!try is_decreasing(copy1, max_faults - 1) and !try is_decreasing(copy2, max_faults - 1)) {
-                return false;
-            } else {
-                break;
-            }
+fn increasing(a: u32, b: u32) bool {
+    return a > b and a - b <= 3;
+}
+
+fn decreasing(a: u32, b: u32) bool {
+    return a < b and b - a <= 3;
+}
+
+fn part1(input: []const u8) !u32 {
+    var counter: u32 = 0;
+    var it = std.mem.splitScalar(u8, input, '\n');
+    while (it.next()) |line| {
+        if (line.len == 0) break;
+        var report_list = std.ArrayList(u32).init(allocator);
+        defer report_list.deinit();
+        var it2 = std.mem.splitScalar(u8, line, ' ');
+        while (it2.next()) |num| {
+            const i = try std.fmt.parseInt(u32, num, 10);
+            try report_list.append(i);
+        }
+        if (try is_trend(report_list.items, 0, increasing)) {
+            counter += 1;
+            // print("PASS1: {s}\n", .{line});
+        } else if (try is_trend(report_list.items, 0, decreasing)) {
+            counter += 1;
+            // print("PASS2: {s}\n", .{line});
+        } else {
+            // print("FAIL: {s}\n", .{line});
         }
     }
-    return true;
+    return counter;
 }
 
 fn part2(input: []const u8) !u32 {
-    const allocator = std.heap.page_allocator;
     var counter: u32 = 0;
 
     var it = std.mem.splitScalar(u8, input, '\n');
@@ -110,14 +85,14 @@ fn part2(input: []const u8) !u32 {
             const i = try std.fmt.parseInt(u32, num, 10);
             try report_list.append(i);
         }
-        if (try is_increasing(report_list.items, 1)) {
+        if (try is_trend(report_list.items, 1, increasing)) {
             counter += 1;
-            print("PASS1: {s}\n", .{line});
-        } else if (try is_decreasing(report_list.items, 1)) {
+            // print("PASS1: {s}\n", .{line});
+        } else if (try is_trend(report_list.items, 1, decreasing)) {
             counter += 1;
-            print("PASS2: {s}\n", .{line});
+            // print("PASS2: {s}\n", .{line});
         } else {
-            print("FAIL: {s}\n", .{line});
+            // print("FAIL: {s}\n", .{line});
         }
     }
     return counter;
