@@ -43,6 +43,7 @@ fn part1(input: []const u8) !u64 {
     }
 
     var antinodes = std.AutoHashMap(vector, usize).init(allocator);
+    defer antinodes.deinit();
 
     var key_it = antennas.keyIterator();
     while (key_it.next()) |key| {
@@ -100,6 +101,7 @@ fn part2(input: []const u8) !u64 {
     }
 
     var antinodes = std.AutoHashMap(vector, usize).init(allocator);
+    defer antinodes.deinit();
 
     var key_it = antennas.keyIterator();
     while (key_it.next()) |key| {
