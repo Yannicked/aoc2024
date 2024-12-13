@@ -109,12 +109,35 @@ fn part1(input: []const u8) !u64 {
 
 fn matrix_method(c: challenge) ?i64 {
     if (c.a.x * c.b.y - c.a.y * c.b.x == 0) return null;
-    const inv: f64 = 1 / @as(f64, @floatFromInt(c.a.x * c.b.y - c.a.y * c.b.x));
-    const n_a: i64 = @intFromFloat(std.math.round(inv * @as(f64, @floatFromInt(c.b.y * c.target.x - c.b.x * c.target.y))));
-    const n_b: i64 = @intFromFloat(std.math.round(inv * @as(f64, @floatFromInt(c.a.x * c.target.y - c.a.y * c.target.x))));
+    const inv: f128 = 1 / @as(f64, @floatFromInt(c.a.x * c.b.y - c.a.y * c.b.x));
+    const n_a: i64 = @intFromFloat(std.math.round(inv * @as(f128, @floatFromInt(c.b.y * c.target.x - c.b.x * c.target.y))));
+    const n_b: i64 = @intFromFloat(std.math.round(inv * @as(f128, @floatFromInt(c.a.x * c.target.y - c.a.y * c.target.x))));
     if (n_a * c.a.x + n_b * c.b.x != c.target.x) return null;
     if (n_a * c.a.y + n_b * c.b.y != c.target.y) return null;
     return (n_a * 3 + n_b);
+}
+
+fn matrix_method2(c: challenge) !?i64 {
+    if (c.a.x * c.b.y - c.a.y * c.b.x == 0) return null;
+    var inv = try std.math.big.Rational.init(allocator);
+    defer inv.deinit();
+    try inv.setRatio(1, c.a.x * c.b.y - c.a.y * c.b.x);
+    var aa = try std.math.big.Rational.init(allocator);
+    defer aa.deinit();
+    var bb = try std.math.big.Rational.init(allocator);
+    defer bb.deinit();
+    var na = try std.math.big.Rational.init(allocator);
+    defer na.deinit();
+    var nb = try std.math.big.Rational.init(allocator);
+    defer nb.deinit();
+
+    try aa.setInt(c.b.y * c.target.x - c.b.x * c.target.y);
+    try bb.setInt(c.a.x * c.target.y - c.a.y * c.target.x);
+    try na.mul(inv, aa);
+    try nb.mul(inv, bb);
+    if (try na.q.to(i64) != 1) return null;
+    if (try nb.q.to(i64) != 1) return null;
+    return try na.p.to(i64) * 3 + try nb.p.to(i64);
 }
 
 fn part2(input: []const u8) !i64 {
@@ -128,7 +151,10 @@ fn part2(input: []const u8) !i64 {
         var c = try parse_in(&it);
         c.target.x += 10000000000000;
         c.target.y += 10000000000000;
-        if (matrix_method(c)) |cost| {
+        // if (matrix_method(c)) |cost| {
+        //     total_cost += cost;
+        // }
+        if (try matrix_method2(c)) |cost| {
             total_cost += cost;
         }
     }
